@@ -414,7 +414,7 @@ def save_sample_patches(patches, symbol_types, base_dir="sample_patches", num_sa
         cv2.imwrite(filename, patch_bgr)
         print(f"Saved sample patch: {filename}")
         
-def extract_notation_patches(image, notation_data, patch_size=(448, 224), context_factor=1.5):
+def extract_notation_patches(image, notation_data, patch_size=(448, 448), context_factor=1.5):
     """Extract patches around notation elements with context."""
     patches = []
     positions = []
@@ -515,7 +515,7 @@ def extract_notation_patches(image, notation_data, patch_size=(448, 224), contex
     
     # After extracting all patches
     if len(patches) > 0:
-        save_sample_patches(patches, symbol_types, base_dir="sample_patches", num_samples=5)
+        save_sample_patches(patches, symbol_types, base_dir="sample_patches", num_samples=1)
     return patches, positions, symbol_types
 
 def create_relative_position_encoding(notation_data):

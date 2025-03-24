@@ -2,13 +2,16 @@
 
 class Config:
     # Data parameters
+    MIXED_PRECISION = True
+    GRADIENT_ACCUMULATION_STEPS = 1  # Adjust as needed
     DATA_ROOT = "/homes/es314/agnostic-OMR/data"
-    IMAGE_SIZE = (448, 448)  # Base image size
+    # IMAGE_SIZE = (448, 448)  # Base image size
+    IMAGE_SIZE = (224, 224)
     INITIAL_SUBSET_SIZE = 1000
     
     # Patch-based processing parameters
     PATCH_BASED = True       
-    PATCH_SIZE = (448, 224)  # Width, height for patches
+    PATCH_SIZE = (448, 448)  # Width, height for patches
     CONTEXT_FACTOR = 1.5     # Context factor for patches
     STAFF_INVARIANT_AUGMENTATION = True  # Apply staff-invariant augmentation
     USE_RELATIVE_POSITION = True  # Use relative position encoding
@@ -23,8 +26,8 @@ class Config:
     OUTPUT_DIR = '/homes/es314/agnostic-OMR/logs'
     
     # Training parameters
-    BATCH_SIZE = 8
-    VAL_BATCH_SIZE = 16  # Larger batch size for validation
+    BATCH_SIZE = 1
+    VAL_BATCH_SIZE = 1  # Larger batch size for validation
     LEARNING_RATE = 3e-5
     WEIGHT_DECAY = 0.01
     EPOCHS = 30
@@ -38,7 +41,7 @@ class Config:
     
     # Device
     DEVICE = "cuda"  # or "cpu"
-    
+    VALIDATE_BATCH_SIZE = True
     # Expansion schedule
     EXPANSION_SCHEDULE = [
         (5, 2000),   # (epoch, new_size)
