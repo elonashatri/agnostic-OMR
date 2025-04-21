@@ -414,7 +414,9 @@ def save_sample_patches(patches, symbol_types, base_dir="sample_patches", num_sa
         cv2.imwrite(filename, patch_bgr)
         print(f"Saved sample patch: {filename}")
         
-def extract_notation_patches(image, notation_data, patch_size=(448, 448), context_factor=1.5):
+# Line 592 in preprocessing.py
+def extract_notation_patches(image, notation_data, patch_size=(224, 224), context_factor=1.5):
+    # Change from (448, 448) to (224, 224)
     """Extract patches around notation elements with context."""
     patches = []
     positions = []
@@ -510,8 +512,8 @@ def extract_notation_patches(image, notation_data, patch_size=(448, 448), contex
             # print(f"Item {item_idx}: Processed {element_count} elements")
     
     # print(f"Extracted {len(patches)} patches with {len(set([s[0] for s in symbol_types]))} unique symbol types")
-    if symbol_types:
-        print(f"Sample symbols: {[s[0] for s in symbol_types[:5]]}")
+    # if symbol_types:
+    #     print(f"Sample symbols: {[s[0] for s in symbol_types[:5]]}")
     
     # After extracting all patches
     if len(patches) > 0:

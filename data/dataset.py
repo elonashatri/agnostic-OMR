@@ -72,7 +72,8 @@ class MusicNotationDataset(Dataset):
     def _get_patch_based_item(self, image, notation, image_path):
         """Process patch-based approach."""
         # Use the function from preprocessing.py
-        patch_size = getattr(self.config, 'PATCH_SIZE', (448, 224))
+        # In the _get_patch_based_item method in MusicNotationDataset class
+        patch_size = getattr(self.config, 'PATCH_SIZE', (224, 224))  # Change from (448, 224) if that's what you have
         context_factor = getattr(self.config, 'CONTEXT_FACTOR', 1.5)
         
         patches, positions, symbol_types = extract_notation_patches(
@@ -208,8 +209,9 @@ class MusicNotationDataset(Dataset):
         # Lazily create symbol map on first use
         if self._symbol_map is None:
             self._create_symbol_map()
-        
-        return self._symbol_map.get(symbol_type, len(self._symbol_map)-1)  # Unknown symbols get the last ID
+        # print(f"Total number of unique symbols: {len(self._symbol_map)}")
+        # return self._symbol_map.get(symbol_type, len(self._symbol_map)-1)  # Unknown symbols get the last ID
+        return self._symbol_map.get(symbol_type, 0)
     
 
     def _create_symbol_map(self):
@@ -281,31 +283,31 @@ class MusicNotationDataset(Dataset):
         
         return position
     
-    def _extract_staff_position(self, item):
-        """Extract staff position (L1, S2, etc.) from notation item."""
-        # Parse the staff position from your notation format
-        # Extract the string first
-        staff_pos_str = self._extract_staff_position_str(item)
+
+    def _extract_staff_position_from_str(self, position_str):
+        """Convert a staff position string (L1, S2, etc.) to a numeric value."""
+        # Default: middle line (0)
+        staff_pos = 0
         
-        # Then convert to numeric value
-        return self._extract_staff_position_from_str(staff_pos_str)
-    
-    def _extract_staff_position_str(self, item):
-        """Extract staff position string (L1, S2, etc.) from notation item."""
-        staff_pos_str = None
-        
-        if "-L" in item or "-S" in item:
+        if position_str:
             try:
-                parts = item.split('-')
-                for part in parts:
-                    if part.startswith('L') or part.startswith('S'):
-                        # Get the staff position part without any following content
-                        staff_pos_str = part.split('{')[0].strip()
-                        break
+                type_char = position_str[0]
+                number = int(position_str[1:])
+                
+                if type_char == 'L':
+                    # Line, numbered from bottom to top but offset to avoid negatives
+                    staff_pos = number + 2  # Map L1-L5 to 3,4,5,6,7 (non-negative)
+                elif type_char == 'S':
+                    # Space, numbered from bottom to top but offset to avoid negatives
+                    staff_pos = number  # Map S1-S4 to 1,2,3,4 (non-negative)
             except:
                 pass
         
-        return staff_pos_str
+        # Ensure value is within valid range for the model
+        max_staff_position = 10  # Adjust based on your model's expected number of classes
+        staff_pos = max(0, min(staff_pos, max_staff_position))
+        
+        return staff_pos
     
     def _extract_staff_position_from_str(self, position_str):
         """Convert a staff position string (L1, S2, etc.) to a numeric value."""

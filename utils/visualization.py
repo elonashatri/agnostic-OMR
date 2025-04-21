@@ -375,3 +375,219 @@ def visualize_model_output(image, outputs, notation_vocab, save_path=None):
         pil_img.save(save_path)
     
     return np.array(pil_img)
+
+def create_tensorboard_visualization(images, outputs, targets, id_to_symbol_map=None, max_samples=4):
+    """
+    Create visualizations for TensorBoard during training.
+    """
+    # Create default mapping if None provided
+    if id_to_symbol_map is None:
+        print("Warning: No symbol map provided, using default mapping")
+        id_to_symbol_map = {i: f"Symbol_{i}" for i in range(200)}
+    
+    # Handle patch-based approach
+    is_patch_based = 'batch_indices' in targets
+    if is_patch_based:
+        print(f"Creating patch-based visualization with {images.shape[0]} patches")
+        
+        # Just visualize a few sample patches
+        max_patches = min(16, images.shape[0])
+        grid_images = []
+        
+        for i in range(max_patches):
+            try:
+                # Get the patch and ensure it's visible
+                patch = images[i].cpu()
+                
+                # Print stats for debugging
+                print(f"Patch {i}: shape={patch.shape}, min={patch.min().item():.4f}, max={patch.max().item():.4f}")
+                
+                # Force normalization to ensure visibility
+                patch = patch - patch.min()
+                if patch.max() > 0:
+                    patch = patch / patch.max()
+                
+                # Add colored border for visibility
+                if patch.shape[0] == 3:  # RGB
+                    # Add red border
+                    patch[0, :5, :] = 1.0  # Top
+                    patch[0, -5:, :] = 1.0  # Bottom
+                    patch[0, :, :5] = 1.0  # Left
+                    patch[0, :, -5:] = 1.0  # Right
+                
+                grid_images.append(patch)
+                
+            except Exception as e:
+                print(f"Error processing patch {i}: {e}")
+        
+        # Create a grid from the patches
+        if grid_images:
+            # Make a grid of images with larger padding and normalization
+            grid = make_grid(grid_images, nrow=4, normalize=True, padding=10, pad_value=0.5)
+            print(f"Grid shape: {grid.shape}, min: {grid.min().item():.4f}, max: {grid.max().item():.4f}")
+            return grid.unsqueeze(0)  # Add batch dimension
+        else:
+            # Return a visible test pattern if no patches could be processed
+            test_image = torch.zeros(3, 224, 224)
+            # Add diagonal lines for visibility
+            for i in range(224):
+                test_image[0, i, i] = 1.0  # Red diagonal
+                test_image[1, i, 224-i-1] = 1.0  # Green diagonal
+            return test_image.unsqueeze(0)  # Add batch dimension
+    
+    # Standard (non-patch) approach
+    else:
+        batch_size = min(images.size(0), max_samples)
+        viz_list = []
+        
+        # Only process the first image if we have issues with the batch
+        if batch_size > 1 and outputs['symbol_logits'].size(0) == 1:
+            batch_size = 1
+        
+        for i in range(batch_size):
+            try:
+                # Get single image
+                img = images[i].cpu()
+                
+                # Ensure image has the right shape (3, H, W)
+                if img.shape[0] == 1:  # If grayscale, repeat to get RGB
+                    img = img.repeat(3, 1, 1)
+                
+                # Convert to numpy for visualization
+                img_np = img.permute(1, 2, 0).numpy()
+                
+                # Ensure values are in 0-255 range for visualization
+                if img_np.max() <= 1.0:
+                    img_np = (img_np * 255).astype(np.uint8)
+                
+                # Create a simple visualization image with colored boxes
+                pil_img = Image.fromarray(img_np)
+                draw = ImageDraw.Draw(pil_img)
+                
+                # Extract predictions - safely handle indexing
+                symbol_logits = outputs['symbol_logits']
+                position_preds = outputs['position_preds']
+                
+                if symbol_logits.dim() > 2:  # Shape: [batch, seq, vocab]
+                    if i < symbol_logits.size(0):
+                        pred_symbols = symbol_logits[i].argmax(dim=-1).cpu()
+                    else:
+                        pred_symbols = symbol_logits[0].argmax(dim=-1).cpu()
+                else:  # Shape: [seq, vocab]
+                    pred_symbols = symbol_logits.argmax(dim=-1).cpu()
+                
+                if position_preds.dim() > 2:  # Shape: [batch, seq, 4]
+                    if i < position_preds.size(0):
+                        pred_positions = position_preds[i].cpu()
+                    else:
+                        pred_positions = position_preds[0].cpu()
+                else:  # Shape: [seq, 4]
+                    pred_positions = position_preds.cpu()
+                
+                # Draw predictions
+                for sym_id, pos in zip(pred_symbols, pred_positions):
+                    # Get symbol name
+                    symbol_name = id_to_symbol_map.get(sym_id.item(), f"ID:{sym_id.item()}")
+                    
+                    # Draw bounding box
+                    x, y, w, h = pos.tolist()
+                    x1, y1 = int(x * pil_img.width), int(y * pil_img.height)
+                    x2, y2 = int((x + w) * pil_img.width), int((y + h) * pil_img.height)
+                    
+                    # Ensure coordinates are valid
+                    x1, y1 = max(0, x1), max(0, y1)
+                    x2, y2 = min(pil_img.width - 1, x2), min(pil_img.height - 1, y2)
+                    
+                    draw.rectangle([(x1, y1), (x2, y2)], outline=(255, 0, 0), width=1)
+                    
+                    # Draw symbol name if we have space
+                    if y1 > 10:
+                        draw.text((x1, y1 - 10), symbol_name[:10], fill=(255, 0, 0))
+                
+                # Convert back to tensor
+                viz_tensor = torch.from_numpy(np.array(pil_img)).permute(2, 0, 1).float() / 255.0
+                viz_list.append(viz_tensor)
+                
+            except Exception as e:
+                print(f"Error visualizing sample {i}: {e}")
+                import traceback
+                traceback.print_exc()
+        
+        # Stack visualizations
+        if viz_list:
+            return torch.stack(viz_list, dim=0)
+        else:
+            return None
+
+
+def create_symbol_mapping(dataset):
+    """Create a mapping from symbol IDs to symbol names."""
+    id_to_symbol = {}
+    
+    # If dataset has a symbol map attribute
+    if hasattr(dataset, '_symbol_map'):
+        # Invert the mapping (symbol name -> id becomes id -> symbol name)
+        for symbol, idx in dataset._symbol_map.items():
+            id_to_symbol[idx] = symbol
+    else:
+        # Create a default mapping if no symbol map exists
+        id_to_symbol = {i: f"Symbol_{i}" for i in range(200)}
+        
+    return id_to_symbol
+
+def calculate_notation_metrics(outputs, targets, id_to_symbol_map=None):
+    """Calculate evaluation metrics for notation recognition."""
+    # Get predictions
+    pred_symbols = outputs['symbol_logits'].argmax(dim=-1).cpu()
+    
+    # Get targets (ground truth)
+    target_symbols = targets['symbol_ids'].cpu()
+    
+    # Calculate symbol accuracy
+    correct_symbols = (pred_symbols == target_symbols).float().sum()
+    total_symbols = target_symbols.numel()
+    symbol_accuracy = (correct_symbols / total_symbols).item() if total_symbols > 0 else 0
+    
+    # Calculate position accuracy (using IoU threshold of 0.5)
+    pred_positions = outputs['position_preds'].cpu()
+    target_positions = targets['positions'].cpu()
+    
+    position_correct = 0
+    for pred_pos, target_pos in zip(pred_positions.view(-1, 4), target_positions.view(-1, 4)):
+        # Calculate IoU (Intersection over Union)
+        x1_pred, y1_pred = pred_pos[0], pred_pos[1]
+        w_pred, h_pred = pred_pos[2], pred_pos[3]
+        x2_pred, y2_pred = x1_pred + w_pred, y1_pred + h_pred
+        
+        x1_target, y1_target = target_pos[0], target_pos[1]
+        w_target, h_target = target_pos[2], target_pos[3]
+        x2_target, y2_target = x1_target + w_target, y1_target + h_target
+        
+        # Calculate intersection area
+        x_inter1 = max(x1_pred, x1_target)
+        y_inter1 = max(y1_pred, y1_target)
+        x_inter2 = min(x2_pred, x2_target)
+        y_inter2 = min(y2_pred, y2_target)
+        
+        width_inter = max(0, x_inter2 - x_inter1)
+        height_inter = max(0, y_inter2 - y_inter1)
+        area_inter = width_inter * height_inter
+        
+        # Calculate union area
+        area_pred = w_pred * h_pred
+        area_target = w_target * h_target
+        area_union = area_pred + area_target - area_inter
+        
+        # Calculate IoU
+        iou = area_inter / area_union if area_union > 0 else 0
+        
+        # Check if IoU exceeds threshold
+        if iou >= 0.5:
+            position_correct += 1
+    
+    position_accuracy = position_correct / total_symbols if total_symbols > 0 else 0
+    
+    return {
+        'symbol_accuracy': symbol_accuracy,
+        'position_accuracy': position_accuracy
+    }

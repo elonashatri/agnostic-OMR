@@ -58,6 +58,20 @@ class MusicNotationLoss(nn.Module):
             position_preds = position_preds * mask.unsqueeze(-1)
             staff_position_logits = staff_position_logits * mask.unsqueeze(-1)
         
+        # Fix potential dimension mismatches
+        if symbol_logits.dim() == 3 and symbol_targets.dim() == 1:
+            symbol_logits = symbol_logits.squeeze(0)  # Remove batch dimension if needed
+        
+        if position_preds.dim() == 3 and position_targets.dim() == 2:
+            position_preds = position_preds.squeeze(0)  # Remove batch dimension if needed
+        
+        if staff_position_logits.dim() == 3 and staff_position_targets.dim() == 1:
+            staff_position_logits = staff_position_logits.squeeze(0)  # Remove batch dimension if needed
+        
+        # Ensure staff position targets are valid (non-negative, within range)
+        num_classes = staff_position_logits.size(-1)
+        staff_position_targets = torch.clamp(staff_position_targets, 0, num_classes - 1)
+        
         # Calculate symbol classification loss
         symbol_loss = self.symbol_criterion(
             symbol_logits.reshape(-1, symbol_logits.size(-1)),

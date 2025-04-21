@@ -3,7 +3,7 @@
 # Script for running music notation transformer training
 # Add these lines just before running the command
 export CUDA_LAUNCH_BLOCKING=1
-export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+export PYTORCH_CUDA_ALLOC_CONF="max_split_size_mb:128,expandable_segments:True"
 # Create logs directory if it doesn't exist
 mkdir -p logs
 
@@ -12,17 +12,17 @@ TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
 LOG_FILE="logs/training_${TIMESTAMP}.log"
 
 # Default parameters
-DATA_ROOT="/homes/es314/agnostic-OMR/data"
+DATA_ROOT="/import/c4dm-05/elona/agnostic-OMR/data"
 OUTPUT_DIR="outputs"
 BATCH_SIZE=1
 VAL_BATCH_SIZE=1
-EPOCHS=50
+EPOCHS=100
 LEARNING_RATE=0.0001
 HIDDEN_DIM=256
-# VIT_MODEL="vit_small_patch16_224"
-VIT_MODEL="vit_small_patch16_384" 
+VIT_MODEL="vit_small_patch16_224"
+# VIT_MODEL="vit_small_patch16_384" 
 DECODER_LAYERS=4
-GPU_ID=0
+GPU_ID=2
 NUM_WORKERS=4
 SUBSET_SIZE=0  # 0 means use all data
 
@@ -106,7 +106,8 @@ echo "Log file: $LOG_FILE" | tee -a "$LOG_FILE"
 echo "" | tee -a "$LOG_FILE"
 
 # Build command
-CMD="python train.py --gpu_id 0 --data_root $DATA_ROOT --output_dir $OUTPUT_DIR"
+CMD="python train.py --gpu_id 2 --data_root $DATA_ROOT --output_dir $OUTPUT_DIR"
+# CMD="$CMD --gradient_accumulation_steps 8"
 CMD="$CMD --batch_size $BATCH_SIZE --val_batch_size $VAL_BATCH_SIZE --epochs $EPOCHS"
 CMD="$CMD --learning_rate $LEARNING_RATE --hidden_dim $HIDDEN_DIM --vit_model $VIT_MODEL"
 CMD="$CMD --decoder_layers $DECODER_LAYERS --num_workers $NUM_WORKERS"

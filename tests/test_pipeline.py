@@ -242,7 +242,7 @@ class SimpleTransformerModel(torch.nn.Module):
 def test_dataset():
     """Test dataset creation and loading."""
     # Config for test
-    data_root = "/homes/es314/agnostic-OMR/data"
+    data_root = "/import/c4dm-05/elona/agnostic-OMR/data"
     batch_size = 2
     
     # Get file paths
